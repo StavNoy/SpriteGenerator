@@ -3,7 +3,7 @@
 	 * DISCLAIMER
 	 * 	hidden files not considered
 	 * 	file names assumed to end with proper extension ('.png', '.css', etc.)
- 	*/
+	 */
 
 	/*
 	 * Script entry point
@@ -24,7 +24,7 @@
 
 	class CSS_Generator
 	{
-		private $opts;
+		private $opts = ['r' => FALSE, 'i' => 'sprite.png', 's' => 'style.css', 'p' => 0];
 		private $images;
 		private $cssData = [];
 		private $masterImg;
@@ -39,7 +39,10 @@
 			if ($this->opts["r"]) {
 				$this->rec_glob_pngs($target);
 			}
-			if (count($this->images) > 0)
+			if (count($this->images) <= 0) {
+				echo __FILE__ . ' : no PNG files found' . PHP_EOL;
+			}
+			else
 			{
 				$this->setMasterImg();
 				$this->append_imgs();
@@ -55,29 +58,31 @@
 		{
 			$args = array_slice($args, array_search(__FILE__, $args));
 			array_pop($args);
-			$opts = ["r" => FALSE, "i" => "sprite.png", "s" => "style.css"];
 			foreach ($args as $arg) {
 				switch ($arg)
 				{
-					case "-r":
-					case "-recursive":
-						$opts["r"] = TRUE;
+					case '-r':
+					case '-recursive':
+						$this->opts['r'] = TRUE;
 						break;
-					case "-i":
-					case "-output-image":
+					case '-i':
+					case '-output-image':
 						$val = $this->getOptVal($arg, $args);
 						$this->checkPath($val);
-						$opts["i"] = $val;
+						$this->opts['i'] = $val;
 						break;
-					case "-s":
-					case "-output-style":
-					$val = $this->getOptVal($arg, $args);
-					$this->checkPath($val);
-						$opts["s"] = $val;
+					case '-s':
+					case '-output-style':
+						$val = $this->getOptVal($arg, $args);
+						$this->checkPath($val);
+						$this->opts['s'] = $val;
+						break;
+					case '-p':
+					case '-padding':
+						$this->opts['p'] = $this->getOptNum($arg, $args);
 						break;
 				}
 			}
-			$this->opts =  $opts;
 		}
 
 		/*
@@ -91,7 +96,8 @@
 				echo __FILE__ . " : option requires an argument -- 'l'" . PHP_EOL;
 				exit();
 			}
-			else {
+			else
+			{
 				return $args[$argI + 1];
 			}
 		}
@@ -101,6 +107,22 @@
 			if (file_exists($path) || !is_writable(dirname($path))) {
 				echo __FILE__ . " : cannot write to '$path' : file exists or permissions missing" . PHP_EOL;
 				exit;
+			}
+		}
+
+		/*
+		 * getOptVal for numeric
+		 */
+		private function getOptNum(string $arg, array $args)
+		{
+			$val = $this->getOptVal($arg, $args);
+			if (is_numeric($val))
+			{
+				return $val;
+			}
+			else
+			{
+				echo __FILE__ . " : $arg expects a numeric value";
 			}
 		}
 
@@ -118,11 +140,11 @@
 		}
 
 		/*
-		 * calculate expected dimensions and create master image
+		 * calculate expected dimensions and create blank master image
 		 */
 		private function setMasterImg ()
 		{
-			$w = 0;
+			$w = (count($this->images)-1) * $this->opts['p'];
 			$h = 0;
 			foreach ($this->images as $img)
 			{
@@ -138,18 +160,25 @@
 		}
 
 		/*
-		 * copies all images to $masterImg and sets needed data for CSS
+		 * copies all images to $ masterImg and sets needed data for CSS
 		 */
 		private function append_imgs()
 		{
-			$destX = 0;
-			foreach ($this->images as $imageName)
+			$images = $this->images;
+			$firstImg = imagecreatefrompng($images[0]);
+			$firstW = imagesx($firstImg);
+			$firstH = imagesy($firstImg);
+			imagecopy($this->masterImg, $firstImg, 0, 0, 0, 0, $firstW, $firstH);
+			$this->cssData[pathinfo($images[0], PATHINFO_FILENAME)] = ['width' => $firstW, 'height' => $firstH];
+			array_shift($images);
+			$destX = $firstW + $this->opts['p'];
+			foreach ($images as $imageName)
 			{
 				$image = imagecreatefrompng($imageName);
 				$imgW = imagesx($image);
 				$imgH = imagesy($image);
 				imagecopy($this->masterImg, $image, $destX, 0, 0, 0, $imgW, $imgH);
-				$destX += $imgW;
+				$destX += $imgW + $this->opts['p'];
 				$this->cssData[pathinfo($imageName, PATHINFO_FILENAME)] = ['width' => $imgW, 'height' => $imgH];
 			}
 		}
@@ -173,7 +202,7 @@
 				'}' . PHP_EOL . PHP_EOL;
 			foreach ($this->cssData as $spriteName => $dimens) {
 				$output .= sprintf($format, $spriteName, $lastX, $dimens['width'], $dimens['height']);
-				$lastX += $dimens['width'];
+				$lastX += $dimens['width'] + $this->opts['p'];
 			}
 			file_put_contents($this->opts['s'],$output);
 		}
