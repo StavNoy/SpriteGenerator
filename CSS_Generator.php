@@ -24,7 +24,7 @@
 
 	class CSS_Generator
 	{
-		private $opts = ['r' => FALSE, 'i' => 'sprite.png', 's' => 'style.css', 'p' => 0];
+		private $opts = ['r' => FALSE, 'i' => 'sprite.png', 's' => 'style.css', 'p' => 0, 'o' => FALSE];
 		private $images;
 		private $cssData = [];
 		private $masterImg;
@@ -40,7 +40,8 @@
 				$this->rec_glob_pngs($target);
 			}
 			if (count($this->images) <= 0) {
-				echo __FILE__ . ' : no PNG files found' . PHP_EOL;
+				echo basename(__FILE__) . ' : no PNG files found' . PHP_EOL;
+				exit();
 			}
 			else
 			{
@@ -56,7 +57,7 @@
 		*/
 		private function set_opts(array $args)
 		{
-			$args = array_slice($args, array_search(__FILE__, $args));
+			$args = array_slice($args, array_search(basename(__FILE__), $args)+1);
 			array_pop($args);
 			foreach ($args as $arg) {
 				switch ($arg)
@@ -79,7 +80,11 @@
 						break;
 					case '-p':
 					case '-padding':
-						$this->opts['p'] = $this->getOptNum($arg, $args);
+						$this->opts['p'] = $this->getOptNum($arg, $args, 0);
+						break;
+					case '-o':
+					case '-override-size':
+						$this->opts['o'] = $this->getOptNum($arg,$args, 1);
 						break;
 				}
 			}
@@ -93,7 +98,7 @@
 		{
 			$argI = array_search($arg, $args);
 			if (count($args) <= $argI) {
-				echo __FILE__ . " : option requires an argument -- 'l'" . PHP_EOL;
+				echo basename(__FILE__) . " : option requires an argument -- 'l'" . PHP_EOL;
 				exit();
 			}
 			else
@@ -105,7 +110,7 @@
 		private function checkPath(string $path)
 		{
 			if (file_exists($path) || !is_writable(dirname($path))) {
-				echo __FILE__ . " : cannot write to '$path' : file exists or permissions missing" . PHP_EOL;
+				echo basename(__FILE__) . " : cannot write to '$path' : file exists or permissions missing" . PHP_EOL;
 				exit;
 			}
 		}
@@ -113,16 +118,17 @@
 		/*
 		 * getOptVal for numeric
 		 */
-		private function getOptNum(string $arg, array $args)
+		private function getOptNum(string $arg, array $args, int $min)
 		{
 			$val = $this->getOptVal($arg, $args);
-			if (is_numeric($val))
+			if (is_numeric($val) && $val >= $min)
 			{
 				return $val;
 			}
 			else
 			{
-				echo __FILE__ . " : $arg expects a numeric value";
+				echo basename(__FILE__) . " : $arg expects a numeric value of at least $min" . PHP_EOL;
+				exit();
 			}
 		}
 
@@ -144,16 +150,25 @@
 		 */
 		private function setMasterImg ()
 		{
-			$w = (count($this->images)-1) * $this->opts['p'];
+			$imgC = count($this->images);
+			$w = ($imgC-1) * $this->opts['p'];
 			$h = 0;
-			foreach ($this->images as $img)
+			if ($this->opts['o'] > 0)
 			{
-				$img = imagecreatefrompng($img);
-				$w += imagesx($img);
-				$imgY = imagesy($img);
-				if ($imgY > $h)
+				$w += $imgC * $this->opts['o'];
+				$h = $this->opts['o'];
+			}
+			else
+			{
+				foreach ($this->images as $img)
 				{
-					$h = $imgY;
+					$img = imagecreatefrompng($img);
+					$w += imagesx($img);
+					$imgY = imagesy($img);
+					if ($imgY > $h)
+					{
+						$h = $imgY;
+					}
 				}
 			}
 			$this->masterImg = imagecreate($w,$h);
@@ -164,22 +179,50 @@
 		 */
 		private function append_imgs()
 		{
+			if ($this->opts['o'] > 0)
+			{
+				$this->append_imgs_override_size();
+			}
+			else
+			{
+				$images = $this->images;
+				$firstImg = imagecreatefrompng($images[0]);
+				$firstW = imagesx($firstImg);
+				$firstH = imagesy($firstImg);
+				imagecopy($this->masterImg, $firstImg, 0, 0, 0, 0, $firstW, $firstH);
+				$this->cssData[pathinfo($images[0], PATHINFO_FILENAME)] = ['width' => $firstW, 'height' => $firstH];
+				array_shift($images);
+				$destX = $firstW + $this->opts['p'];
+				foreach ($images as $imageName)
+				{
+					$image = imagecreatefrompng($imageName);
+					$imgW = imagesx($image);
+					$imgH = imagesy($image);
+					imagecopy($this->masterImg, $image, $destX, 0, 0, 0, $imgW, $imgH);
+					$destX += $imgW + $this->opts['p'];
+					$this->cssData[pathinfo($imageName, PATHINFO_FILENAME)] = ['width' => $imgW, 'height' => $imgH];
+				}
+			}
+		}
+
+		/*
+		 * append_imgs() for when size override specified
+		*/
+		private function append_imgs_override_size()
+		{
 			$images = $this->images;
 			$firstImg = imagecreatefrompng($images[0]);
-			$firstW = imagesx($firstImg);
-			$firstH = imagesy($firstImg);
-			imagecopy($this->masterImg, $firstImg, 0, 0, 0, 0, $firstW, $firstH);
-			$this->cssData[pathinfo($images[0], PATHINFO_FILENAME)] = ['width' => $firstW, 'height' => $firstH];
+			$size = $this->opts['o'];
+			imagecopy($this->masterImg, $firstImg, 0, 0, 0, 0, $size, $size);
+			$this->cssData[pathinfo($images[0], PATHINFO_FILENAME)] = ['width' => $size, 'height' => $size];
 			array_shift($images);
-			$destX = $firstW + $this->opts['p'];
+			$destX = $size + $this->opts['p'];
 			foreach ($images as $imageName)
 			{
 				$image = imagecreatefrompng($imageName);
-				$imgW = imagesx($image);
-				$imgH = imagesy($image);
-				imagecopy($this->masterImg, $image, $destX, 0, 0, 0, $imgW, $imgH);
-				$destX += $imgW + $this->opts['p'];
-				$this->cssData[pathinfo($imageName, PATHINFO_FILENAME)] = ['width' => $imgW, 'height' => $imgH];
+				imagecopy($this->masterImg, $image, $destX, 0, 0, 0, $size, $size);
+				$destX += $size + $this->opts['p'];
+				$this->cssData[pathinfo($imageName, PATHINFO_FILENAME)] = ['width' => $size, 'height' => $size];
 			}
 		}
 
@@ -188,7 +231,7 @@
 		 */
 		private function gen_css()
 		{
-			$output = '/* Generated by ' . __FILE__ . ' at ' . date("d-m-Y h:i a e") . ' */' . PHP_EOL . PHP_EOL;
+			$output = '/* Generated by ' . basename(__FILE__) . ' at ' . date("d-m-Y h:i a e") . ' */' . PHP_EOL . PHP_EOL;
 			$output .= '.img {' . PHP_EOL .
 				"\tdisplay: inline-block;" . PHP_EOL .
 				"\tbackground: url('" . basename($this->opts['i']) . "') no-repeat;" . PHP_EOL .
