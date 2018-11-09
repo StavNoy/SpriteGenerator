@@ -3,14 +3,14 @@
 	 * DISCLAIMER
 	 * 	hidden files not considered
 	 * 	file names assumed to end with proper extension ('.png', '.css', etc.)
-	 *  not accounting for multiple images with the same name
-	 * 		if needed,
+	 *  not accounting for multiple images with the same name, for readability
+	 * 		if needed, names can simply remain paths (currently simple name is extracted) or overridden
 	 */
 
 	/*
 	 * Script entry point
 	 * path to directory containing all PNGs always expected as last argument
-	 * creates nd uses helper class 'CSS_Generator'
+	 * creates and uses helper class 'CSS_Generator'
 	*/
 
 	$target = $argv[$argc-1];
@@ -45,7 +45,7 @@
 			$this->setImages($target);
 			$this->setCanvas();
 			$this->imgs_to_canvas();
-			imagepng($this->canvas, $this->spriteName); //NOTICE compression and file size options
+			imagepng($this->canvas, $this->spriteName);
 			$this->gen_css();
 		}
 
