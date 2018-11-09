@@ -26,22 +26,26 @@
 
 	class CSS_Generator
 	{
-		private $opts = ['r' => FALSE, 'i' => 'sprite.png', 's' => 'style.css', 'p' => 0, 'o' => FALSE, 'c' => FALSE];
+		private $recurse = FALSE;
+		private $spriteName = 'sprite.png';
+		private $styleName = 'style.css';
+		private $pad = 0;
+		private $override = FALSE;
+		private $col_limit = FALSE;
+		private $imgDataRows;
+		private $rowHeights;
 		private $imgC;
 		private $cssData;
-		private $masterImg;
-		private $imagesData;
+		private $canvas;
 
-		/*
-		 * Constructor serves as request executor
-		*/
+
 		public function __construct(string $target, array $args)
 		{
 			$this->set_opts($args);
-			$this->setImages($target, $this->opts['o'] <= 0);
-			$this->setMasterImg();
-			$this->append_imgs();
-			imagepng($this->masterImg, $this->opts["i"]); //NOTICE compression and file size options
+			$this->setImages($target);
+			$this->setCanvas();
+			$this->imgs_to_canvas();
+			imagepng($this->canvas, $this->spriteName); //NOTICE compression and file size options
 			$this->gen_css();
 		}
 
@@ -58,31 +62,31 @@
 				{
 					case '-r':
 					case '-recursive':
-						$this->opts['r'] = TRUE;
+						$this->recurse = TRUE;
 						break;
 					case '-i':
 					case '-output-image':
 						$val = $this->getOptVal($arg, $args);
 						$this->checkPath($val);
-						$this->opts['i'] = $val;
+						$this->spriteName = $val;
 						break;
 					case '-s':
 					case '-output-style':
 						$val = $this->getOptVal($arg, $args);
 						$this->checkPath($val);
-						$this->opts['s'] = $val;
+						$this->styleName = $val;
 						break;
 					case '-p':
 					case '-padding':
-						$this->opts['p'] = $this->getOptNum($arg, $args, 0);
+						$this->pad = $this->getOptNum($arg, $args, 0);
 						break;
 					case '-o':
 					case '-override-size':
-						$this->opts['o'] = $this->getOptNum($arg, $args, 1);
+						$this->override = $this->getOptNum($arg, $args, 1);
 						break;
 					case '-c':
 					case '-columns_number':
-						$this->opts['c'] = $this->getOptNum($arg, $args, 1);
+						$this->col_limit = $this->getOptNum($arg, $args, 1);
 						break;
 				}
 			}
@@ -132,42 +136,36 @@
 			}
 		}
 
-		//todo expand explanation comment
-		// ask 2 ternaries instead of 1 if()
 		/*
-		 *
+		 * initiates 2D array of all image data, where:
+		 * 	1st level array : index => row
+		 * 	2nd level array: 'name' => simple name
+		 * 					'img' => created image,
+		 * 					'width' and 'height' => final size		(may be overridden value)
 		 */
-		private function setImages(string $target, bool $override = FALSE)
+		private function setImages(string $target)
 		{
-			$pngs = $this->find_pngs_setImgC($target);
-			$lastRow = ($this->opts['c'] > 0) ? ($this->imgC / $this->opts['c']) : 1;
-			for ($row = 0; $row < $this->imgC && $row < $lastRow;)
+			$paths = $this->find_pngs_setImgC($target);
+			$allData = [];
+			foreach ($paths as $path)
 			{
-				foreach ($pngs as $src)
-				{
-					$img = imagecreatefrompng($src);
-					$this->imagesData[$row][$src]['img'] = $img;
-					if ($override)
-					{
-						$this->imagesData[$row][$src]['width'] = $this->opts['o'];
-						$this->imagesData[$row][$src]['height'] = $this->opts['o'];
-					}
-					else
-					{
-						$this->imagesData[$row][$src]['width'] = imagesx($img);
-						$this->imagesData[$row][$src]['height'] = imagesy($img);
-					}
-				}
+				$data['name'] = pathinfo($path, PATHINFO_FILENAME);
+				$img = imagecreatefrompng($path);
+				$data['img'] = $img;
+				$data['width'] = $this->override ? $this->override : imagesx($img);
+				$data['height'] = $this->override ? $this->override : imagesy($img);
+				$allData[$path] = $data;
 			}
+			$this->imgDataRows = $this->col_limit ? array_chunk($allData, $this->col_limit) : [$allData];
 		}
 
 		/*
-		 * finds and returns all PNGs in $target, recursively if specified in args
+		 * finds and returns all PNG files' names in $target, recursively if specified in args
 		 * feedback and exit if non found
 		 */
 		private function find_pngs_setImgC(string $target)
 		{
-			if ($this->opts["r"]) {
+			if ($this->recurse) {
 				$pngs = $this->rec_glob_pngs($target);
 			}
 			else
@@ -190,7 +188,7 @@
 		 */
 		private function rec_glob_pngs(string $folder)
 		{
-			$sources = glob("$dir/*.png");
+			$sources = glob("$folder/*.png");
 			$dirs = glob("$folder/*[^.]", GLOB_ONLYDIR);
 			foreach ($dirs as $dir)
 			{
@@ -201,76 +199,60 @@
 
 		/*
 		 * calculate expected dimensions and create blank master image
+		 * saves height for each row
 		 */
-		private function setMasterImg()
+		private function setCanvas()
 		{
-			$w = 0;
-			$h = 0;
-			$col = $this->opts['c'];
-			if ($col > 0)
+			$maxW = 0;
+			$h = $this->pad * (count($this->imgDataRows) - 1);
+			foreach ($this->imgDataRows as $i => $row)
 			{
-				$rows = array_chunk($this->imagesData, $col);
-				foreach ($rows as $row)
+				$row_dims = $this->calc_row_dims($row);
+				$this->rowHeights[$i] = $row_dims[1];
+				$h += $row_dims[1];
+				if ($maxW < $row_dims[0])
 				{
-					$row_dims = $this->calc_dims($row);
-					if ($w < $row_dims[0])
-					{
-						$w = $row_dims[0];
-					}
-					$h += $row_dims[1];
+					$maxW = $row_dims[0];
 				}
 			}
-			else
-			{
-				$dims = $this->calc_dims($this->imagesData);
-				$w = $dims[0];
-				$h = $dims[1];
-			}
-			$this->masterImg = imagecreate($w,$h);
+			$this->canvas = imagecreate($maxW,$h);
 		}
 
 		/*
-		 * calculates overall size for each given row of images (accumulated width X largest height)
+		 * calculates overall size for each given row of imagesData (accumulated-width X max-height)
 		 */
-		private function calc_dims(array $imagesDataRow)
+		private function calc_row_dims(array $imgDataRow)
 		{
-			$w = ($this->imgC -1) * $this->opts['p'];
-			$h = 0;
-			foreach ($imagesDataRow as $imgData)
+			$w = $this->pad * (count($imgDataRow) -1);
+			$maxH = 0;
+			foreach ($imgDataRow as $imgData)
 			{
 				$w += $imgData['width'];
-				if ($imgData['height'] > $h)
+				if ($imgData['height'] > $maxH)
 				{
-					$h = $imgData['height'];
+					$maxH = $imgData['height'];
 				}
 			}
-			return [$w,$h];
+			return [$w,$maxH];
 		}
 
 		/*
 		 * copies all images to $ masterImg and sets needed data for CSS
 		 */
-		private function append_imgs()
+		private function imgs_to_canvas()
 		{
 			$destX = 0;
 			$destY = 0;
-			$col = 1;
-			foreach ($this->imagesData as $imgName => $imgData)
+			foreach ($this->imgDataRows as $i => $row)
 			{
-				imagecopy($this->masterImg, $imgData['img'], $destX, $destY, 0, 0, $imgData['width'], $imgData['height']);
-				$fileName = pathinfo($imgName, PATHINFO_FILENAME);
-				$this->cssData[$fileName] = ['x' => $destX, 'y' => $destY, 'width' => $imgData['width'], 'height' => $imgData['height']];
-				if ($col == $this->opts['c'])
+				foreach ($row as $data)
 				{
-					$col = 1;
-					$destY += ; //todo make row height accessible
-					$destX = 0;
+					imagecopy($this->canvas, $data['img'], $destX, $destY, 0, 0, $data['width'], $data['height']);
+					$this->cssData[$data['name']] = ['x' => $destX, 'y' => $destY, 'width' => $data['width'], 'height' => $data['height']];
+					$destX += $this->pad + $data['width'];
 				}
-				else
-				{
-					$destX += $imgData['width'] + $this->opts['p'];
-					$col++;
-				}
+				$destY += $this->pad + $this->rowHeights[$i];
+				$destX = 0;
 			}
 		}
 
@@ -282,7 +264,7 @@
 			$output = '/* Generated by ' . basename(__FILE__) . ' at ' . date("d-m-Y h:i a e") . ' */' . PHP_EOL . PHP_EOL;
 			$output .= '.img {' . PHP_EOL .
 							"\tdisplay: inline-block;" . PHP_EOL .
-							"\tbackground: url('" . basename($this->opts['i']) . "') no-repeat;" . PHP_EOL .
+							"\tbackground: url('" . basename($this->spriteName) . "') no-repeat;" . PHP_EOL .
 							'}' . PHP_EOL . PHP_EOL;
 
 			foreach ($this->cssData as $spriteName => $dimens) {
@@ -292,6 +274,6 @@
 					"\theight: " . $dimens['height'] . "px;" . PHP_EOL .
 					'}' . PHP_EOL . PHP_EOL;
 			}
-			file_put_contents($this->opts['s'],$output);
+			file_put_contents($this->styleName,$output);
 		}
 	}
