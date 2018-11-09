@@ -66,15 +66,11 @@
 						break;
 					case '-i':
 					case '-output-image':
-						$val = $this->getOptVal($arg, $args);
-						$this->checkPath($val);
-						$this->spriteName = $val;
+						$this->spriteName = $this->checkOptPath($arg, $args);
 						break;
 					case '-s':
 					case '-output-style':
-						$val = $this->getOptVal($arg, $args);
-						$this->checkPath($val);
-						$this->styleName = $val;
+						$this->styleName = $this->checkOptPath($arg, $args);
 						break;
 					case '-p':
 					case '-padding':
@@ -92,35 +88,24 @@
 			}
 		}
 
-
 		/*
-		 * Options with values expect them at next index of arguments
-		 * Not to be used for options with multiple or optional values
-		*/
-		private function getOptVal(string $arg, array $args)
+		 * get path value for option
+		 */
+		private function checkOptPath(string $arg, array $args)
 		{
-			$argI = array_search($arg, $args);
-			if (count($args) <= $argI) {
-				echo basename(__FILE__) . " : option requires an argument -- 'l'" . PHP_EOL;
-				exit();
-			}
-			else
-			{
-				return $args[$argI + 1];
-			}
-		}
-
-		private function checkPath(string $path)
-		{
+			$path = $this->getOptVal($arg, $args);
 			if (file_exists($path) || !is_writable(dirname($path))) {
 				echo basename(__FILE__) . " : cannot write to '$path' : file exists or permissions missing" . PHP_EOL;
 				exit;
 			}
+			else
+			{
+				return $path;
+			}
 		}
 
 		/*
-		 * getOptVal for numeric
-		 * ASK maybe merge into getOptVal() with default valued param ? (int $min = FALSE ;...; if($min !== FALSE && $val > $min))
+		 * get numeric value for option
 		 */
 		private function getOptNum(string $arg, array $args, int $min)
 		{
@@ -133,6 +118,23 @@
 			{
 				echo basename(__FILE__) . " : $arg expects a numeric value of at least $min" . PHP_EOL;
 				exit();
+			}
+		}
+
+		/*
+		 * Options with values expect them at next index of arguments
+		 * Not to be used for options with multiple or optional values
+		*/
+		private function getOptVal(string $arg, array $args)
+		{
+			$argI = array_search($arg, $args);
+			if (count($args) <= $argI) {
+				echo basename(__FILE__) . " : $arg requires a valid argument " . PHP_EOL;
+				exit();
+			}
+			else
+			{
+				return $args[$argI + 1];
 			}
 		}
 
