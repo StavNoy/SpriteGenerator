@@ -2,7 +2,7 @@
 	/*
 	 * DISCLAIMER
 	 * 	hidden files not considered
-	 * 	file names assumed to end with proper extension ('.png', '.css', etc.)
+	 * 	output file extensions not added via code ('.png', '.css', etc.)
 	 *  not accounting for multiple images with the same name, for readability
 	 * 		if needed, names can simply remain paths (currently simple name is extracted) or overridden
 	 */
@@ -128,7 +128,7 @@
 		private function getOptVal(string $arg, array $args)
 		{
 			$argI = array_search($arg, $args);
-			if (count($args) <= $argI) {
+			if (count($args) <= $argI+1) {
 				echo basename(__FILE__) . " : $arg requires a valid argument " . PHP_EOL;
 				exit();
 			}
@@ -167,13 +167,8 @@
 		 */
 		private function find_pngs_setImgC(string $target)
 		{
-			if ($this->recurse) {
-				$pngs = $this->rec_glob_pngs($target);
-			}
-			else
-			{
-				$pngs = glob("$target/*.png");
-			}
+			$pngs = [];
+			$this->rec_add_pngs($target, $pngs);
 			$this->imgC = count($pngs);
 			if ($this->imgC <= 0) {
 				echo basename(__FILE__) . ' : no PNG files found' . PHP_EOL;
@@ -188,15 +183,23 @@
 		/*
 		 * recurse subdirectories for PNGs
 		 */
-		private function rec_glob_pngs(string $folder)
+		private function rec_add_pngs(string $folder, array &$pngs)
 		{
-			$sources = glob("$folder/*.png");
-			$dirs = glob("$folder/*[^.]", GLOB_ONLYDIR);
-			foreach ($dirs as $dir)
+			if ($dir = opendir($folder))
 			{
-				$sources = array_merge($sources, $this->rec_glob_pngs("$dir"));
+				while ($file = readdir($dir))
+				{
+					if (mime_content_type("$folder/$file") == 'image/png')
+					{
+						$pngs[] = "$folder/$file";
+					}
+					elseif ($this->recurse && is_dir($file) && $file != '.' && $file != '..')
+					{
+						$this->rec_add_pngs("$folder/$file", $pngs);
+					}
+				}
+				closedir($dir);
 			}
-			return $sources;
 		}
 
 		/*
