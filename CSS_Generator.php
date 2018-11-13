@@ -3,8 +3,6 @@
 	 * DISCLAIMER
 	 * 	hidden files not considered
 	 * 	output file extensions not added via code ('.png', '.css', etc.)
-	 *  not accounting for multiple images with the same name, for readability
-	 * 		if needed, names can simply remain paths (currently simple name is extracted) or overridden
 	 */
 
 	/*
@@ -151,7 +149,7 @@
 			$allData = [];
 			foreach ($paths as $path)
 			{
-				$data['name'] = pathinfo($path, PATHINFO_FILENAME);
+				$data['cssName'] = $spriteName = 'img_' . preg_replace(['/\//','/[^_a-z\d-]/'],['_', '-'], strtolower($path));
 				$img = imagecreatefrompng($path);
 				$data['img'] = $img;
 				$data['width'] = $this->override ? $this->override : imagesx($img);
@@ -253,7 +251,7 @@
 				foreach ($row as $data)
 				{
 					imagecopy($this->canvas, $data['img'], $destX, $destY, 0, 0, $data['width'], $data['height']);
-					$this->cssData[$data['name']] = ['x' => $destX, 'y' => $destY, 'width' => $data['width'], 'height' => $data['height']];
+					$this->cssData[$data['cssName']] = ['x' => $destX, 'y' => $destY, 'width' => $data['width'], 'height' => $data['height']];
 					$destX += $this->pad + $data['width'];
 				}
 				$destY += $this->pad + $this->rowHeights[$i];
@@ -273,7 +271,7 @@
 							'}' . PHP_EOL . PHP_EOL;
 
 			foreach ($this->cssData as $spriteName => $dimens) {
-				$output .= ".img.img-$spriteName {" . PHP_EOL .
+				$output .= ".img.$spriteName {" . PHP_EOL .
 					"\tbackground-position: -" . $dimens['x'] . "px -" . $dimens['y'] . "px;" . PHP_EOL .
 					"\twidth: " . $dimens['width'] . "px;" . PHP_EOL .
 					"\theight: " . $dimens['height'] . "px;" . PHP_EOL .
