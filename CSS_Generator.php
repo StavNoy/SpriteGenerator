@@ -49,7 +49,6 @@
 
 		/*
 		 * reads specified options from passed arguments and sets to appropriate fields, with default values
-		 * ASK unify in groups ? (no val, str val, num val)
 		*/
 		private function set_opts(array $args)
 		{
