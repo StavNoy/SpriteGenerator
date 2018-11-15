@@ -55,7 +55,11 @@
 			$args = array_slice($args, array_search(basename(__FILE__), $args)+1);
 			array_pop($args);
 			foreach ($args as $arg) {
-				if (($arg_val = $arg_val = $this->get_arg_equalVal($arg)) || ($arg_val = $this->get_arg_nextVal($arg, $args)))
+				if ($arg == '-r' || $arg == '-recursive')
+				{
+					$this->recurse = TRUE;
+				}
+				if (($arg_val = $arg_val = $this->get_arg_equalVal($arg))[1] || ($arg_val = $this->get_arg_nextVal($arg, $args)))
 				{
 					$this->setOneOpt(...$arg_val);
 				}
@@ -67,23 +71,23 @@
 			switch ($opt)
 			{
 				case '-i':
-				case '-output-image=':
+				case '-output-image':
 					$this->spriteName = $this->checkOptPath($val);
 					break;
 				case '-s':
-				case '-output-style=':
+				case '-output-style':
 					$this->styleName = $this->checkOptPath($val);
 					break;
 				case '-p':
-				case '-padding=':
+				case '-padding':
 					$this->pad = $this->checkOptNum($val, 0, $opt);
 					break;
 				case '-o':
-				case '-override-size=':
+				case '-override-size':
 					$this->override = $this->checkOptNum($val, 1, $opt);
 					break;
 				case '-c':
-				case '-columns_number=':
+				case '-columns_number':
 					$this->col_limit = $this->checkOptNum($val, 1, $opt);
 					break;
 			}
@@ -144,7 +148,7 @@
 			if ($pos = strpos($arg, '='))
 			{
 				$opt = substr($arg, 0, $pos);
-				$val = substr($arg, $pos);
+				$val = substr($arg, $pos + 1);
 				if (strlen($val) > 0)
 				{
 					return [$opt, $val];
@@ -208,7 +212,7 @@
 					{
 						$pngs[] = "$folder/$file";
 					}
-					elseif ($this->recurse && is_dir($file) && $file != '.' && $file != '..')
+					elseif ($this->recurse && is_dir("$folder/$file") && $file != '.' && $file != '..')
 					{
 						$this->rec_add_pngs("$folder/$file", $pngs);
 					}
